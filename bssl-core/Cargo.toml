@@ -1,0 +1,19 @@
+[package]
+name = "bssl-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "bssl_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+boring = "4.17.0"
+boring-sys = "4.17.0"
+foreign-types = "0.5.0"
+pyo3 = { version = "0.25.1", features = ["extension-module"] }
+rustls-native-certs = "0.8.1"

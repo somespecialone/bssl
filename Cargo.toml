@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["bssl-core"]
+default-members = ["bssl-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88.0"
+authors = ["Dmytro Tkachenko <itsme@somespecial.one>"]
+license = "MIT"
+publish = false
+readme = "README.md"

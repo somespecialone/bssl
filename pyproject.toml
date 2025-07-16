@@ -1,0 +1,16 @@
+[project]
+name = "bssl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.maturin]
+python-packages = ["bssl"]
+manifest-path = "bssl-core/Cargo.toml"
+
+# https://github.com/pyca/cryptography/blob/main/pyproject.toml
+
+[tool.black]
+line-length = 120
