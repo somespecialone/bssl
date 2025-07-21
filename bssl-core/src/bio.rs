@@ -1,6 +1,5 @@
 use std::ffi::c_int;
 use std::io::{Error as IoError, Read, Result as IoResult, Write};
-use std::{ptr, slice};
 
 use boring::error::ErrorStack;
 use boring_sys as ffi;
@@ -85,13 +84,5 @@ impl MemBio {
 
     pub fn as_ptr(&self) -> *mut ffi::BIO {
         self.0
-    }
-
-    pub fn get_buf(&self) -> &[u8] {
-        unsafe {
-            let mut ptr = ptr::null_mut();
-            let len = ffi::BIO_get_mem_data(self.0, &mut ptr);
-            slice::from_raw_parts(ptr as *const _ as *const _, len as usize)
-        }
     }
 }

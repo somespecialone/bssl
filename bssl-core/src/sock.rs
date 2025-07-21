@@ -1,15 +1,19 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-use boring::ssl::{Ssl, SslStream};
+use boring::ssl::{ShutdownResult, Ssl, SslStream};
 use boring::x509::verify::X509CheckFlags;
 use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError};
 use pyo3::prelude::*;
 
-use crate::ext::SslExt;
+use crate::ctx::ClientContext;
+use crate::ext::SslRefExt;
 
 #[pyclass]
 pub struct TLSSocket {
+    #[pyo3(get)]
+    context: Py<ClientContext>,
+
     stream: SslStream<TcpStream>,
 }
 
@@ -37,8 +41,7 @@ impl TLSSocket {
         match self.stream.do_handshake() {
             Ok(_) => Ok(()),
             Err(err) => Err(PyRuntimeError::new_err(format!(
-                "TLS handshake failed. Msg: {}, code: {}",
-                err,
+                "TLS handshake failed. Msg: {err}, code: {}",
                 err.code().as_raw()
             ))),
         }
@@ -48,27 +51,34 @@ impl TLSSocket {
         Ok(self.stream.get_ref().local_addr().unwrap().to_string())
     }
 
-    fn getpeercert(&self) -> PyResult<Vec<u8>> {
-        Err(PyNotImplementedError::new_err("Not implemented"))
+    fn getpeercert(&self) -> PyResult<Option<Vec<u8>>> {
+        Ok(self.stream.ssl().peer_certificate_der())
     }
 
     fn getpeername(&self) -> PyResult<String> {
         Ok(self.stream.get_ref().peer_addr().unwrap().to_string())
     }
 
-    fn cipher(&self) -> PyResult<Option<usize>> {
-        Err(PyNotImplementedError::new_err("Not implemented"))
+    fn cipher(&self) -> PyResult<Option<u16>> {
+        match self.stream.ssl().current_cipher_id() {
+            None => Ok(None),
+            Some(cipher) => Ok(Some(cipher)),
+        }
     }
 
     fn negotiated_protocol(&self) -> PyResult<Option<Vec<u8>>> {
-        Err(PyNotImplementedError::new_err("Not implemented"))
+        Ok(self.stream.ssl().negotiated_protocol())
     }
 
     #[getter]
     fn negotiated_tls_version(&self) -> PyResult<Option<String>> {
-        Err(PyNotImplementedError::new_err("Not implemented"))
+        match self.stream.ssl().version2() {
+            None => Ok(None),
+            Some(version) => Ok(Some(version.to_string())),
+        }
     }
 
+    #[allow(unused_variables)]
     fn listen(&self, backlog: usize) -> PyResult<()> {
         Err(PyNotImplementedError::new_err("Not implemented"))
     }
@@ -79,14 +89,29 @@ impl TLSSocket {
 
     #[pyo3(signature = (force=false))]
     fn close(&mut self, force: bool) -> PyResult<()> {
-        match self.stream.shutdown() {
-            Ok(_) => Ok(()),
-            Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
+        let mut try_shutdown = || {
+            self.stream
+                .shutdown()
+                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
+        };
+
+        let mut res = try_shutdown()?;
+
+        // waiting until other side send us close msg
+        while !force && res == ShutdownResult::Received {
+            res = try_shutdown()?;
         }
+
+        Ok(())
     }
 }
 
-pub fn new(mut ssl: Ssl, address: &str, server_hostname: &str) -> TLSSocket {
+pub fn new(
+    context: Py<ClientContext>,
+    mut ssl: Ssl,
+    address: &str,
+    server_hostname: &str,
+) -> TLSSocket {
     ssl.set_hostname(server_hostname).unwrap();
 
     let ssl_param = ssl.param_mut();
@@ -98,5 +123,5 @@ pub fn new(mut ssl: Ssl, address: &str, server_hostname: &str) -> TLSSocket {
     let tcp_stream = TcpStream::connect(address).unwrap();
     let stream = SslStream::new(ssl, tcp_stream).unwrap();
 
-    TLSSocket { stream }
+    TLSSocket { context, stream }
 }

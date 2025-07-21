@@ -14,3 +14,8 @@ manifest-path = "bssl-core/Cargo.toml"
 
 [tool.black]
 line-length = 120
+
+[dependency-groups]
+dev = [
+    "aiohttp>=3.12.14",
+]

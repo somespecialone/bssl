@@ -2,28 +2,39 @@ use boring::ssl::{
     Ssl, SslContext, SslContextBuilder, SslMethod, SslMode, SslOptions, SslVerifyMode, SslVersion,
 };
 use boring::x509::{X509, store::X509StoreBuilder};
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rustls_native_certs::load_native_certs;
 
 use crate::buf;
-use crate::socket;
+use crate::sock;
 
 #[pyclass]
 pub struct ClientContext {
     inner: SslContext,
 }
 
-// from python enum, better to make rust-python enum
+const DEF_CIPHERS: &str = "DEFAULT:!aNULL:!eNULL:!MD5:!3DES:!DES:!RC4:!IDEA:!SEED:!aDSS:!SRP:!PSK";
 const MINIMUM_SUPPORTED: &str = "MINIMUM_SUPPORTED";
 const TLSV1_2: &str = "TLSv1.2";
 const TLSV1_3: &str = "TLSv1.3";
 const MAXIMUM_SUPPORTED: &str = "MAXIMUM_SUPPORTED";
 
-// TODO how about to move/add defaults here and not at python wrapper?
+fn get_tls_version(version: &str) -> Result<SslVersion, PyErr> {
+    match version {
+        MINIMUM_SUPPORTED => Ok(SslVersion::TLS1),
+        TLSV1_2 => Ok(SslVersion::TLS1_2),
+        TLSV1_3 | MAXIMUM_SUPPORTED => Ok(SslVersion::TLS1_3),
+        _ => Err(PyValueError::new_err(format!(
+            "Unsupported or invalid tls version {version}"
+        ))),
+    }
+}
+
 #[pymethods]
 impl ClientContext {
     #[new]
+    #[pyo3(signature = (verify=true, ciphers=DEF_CIPHERS, min_tls_version=MINIMUM_SUPPORTED, max_tls_version=MAXIMUM_SUPPORTED))]
     fn new(
         verify: bool,
         ciphers: &str,
@@ -51,36 +62,14 @@ impl ClientContext {
         opts |= SslOptions::SINGLE_DH_USE | SslOptions::SINGLE_ECDH_USE;
         builder.set_options(opts);
 
-        // explicitly select and set min version
-        let min_tls_version = match min_tls_version {
-            MINIMUM_SUPPORTED => SslVersion::TLS1,
-            TLSV1_2 => SslVersion::TLS1_2,
-            TLSV1_3 | MAXIMUM_SUPPORTED => SslVersion::TLS1_3,
-            _ => {
-                return Err(PyValueError::new_err(format!(
-                    "Invalid tls version {}",
-                    min_tls_version
-                )));
-            }
-        };
+        let min_tls_version = get_tls_version(min_tls_version)?;
         builder
             .set_min_proto_version(Some(min_tls_version))
             .unwrap();
 
-        // same goes for max version
-        let max_tls_version = match max_tls_version {
-            MINIMUM_SUPPORTED => SslVersion::TLS1,
-            TLSV1_2 => SslVersion::TLS1_2,
-            TLSV1_3 | MAXIMUM_SUPPORTED => SslVersion::TLS1_3,
-            _ => {
-                return Err(PyValueError::new_err(format!(
-                    "Invalid tls version {}",
-                    max_tls_version
-                )));
-            }
-        };
+        let max_tls_version = get_tls_version(max_tls_version)?;
         builder
-            .set_max_proto_version(Some(min_tls_version))
+            .set_max_proto_version(Some(max_tls_version))
             .unwrap();
 
         // store
@@ -107,16 +96,30 @@ impl ClientContext {
         Ok(Self { inner: ctx })
     }
 
-    fn connect(&self, address: &str, server_hostname: &str) -> PyResult<socket::TLSSocket> {
+    fn connect(
+        self_: Py<ClientContext>,
+        address: &str,
+        server_hostname: &str,
+        py: Python<'_>,
+    ) -> PyResult<sock::TLSSocket> {
+        let py_self = self_.clone_ref(py);
+        let borrowed = self_.borrow(py);
         // TODO check how other projects handle address/hostname tension
-        let ssl = Ssl::new(&self.inner).unwrap();
-        let sock = socket::new(ssl, address, server_hostname);
+        let ssl = Ssl::new(&borrowed.inner).unwrap();
+        let sock = sock::new(py_self, ssl, address, server_hostname);
         Ok(sock)
     }
 
-    fn create_buffer(&self, server_hostname: &str) -> PyResult<buf::TLSBuffer> {
-        let ssl = Ssl::new(&self.inner).unwrap();
-        let buf = buf::new(ssl, server_hostname);
+    fn create_buffer(
+        self_: Py<ClientContext>,
+        server_hostname: &str,
+        py: Python<'_>,
+    ) -> PyResult<buf::TLSBuffer> {
+        let py_self = self_.clone_ref(py);
+        let borrowed = self_.borrow(py);
+
+        let ssl = Ssl::new(&borrowed.inner).unwrap();
+        let buf = buf::new(py_self, ssl, server_hostname);
         Ok(buf)
     }
 }
