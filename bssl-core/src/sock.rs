@@ -52,8 +52,9 @@ impl TLSSocket {
     fn recv(&mut self, bufsize: usize) -> PyResult<Vec<u8>> {
         let mut buf = vec![0u8; bufsize];
         match self.stream.read(&mut buf) {
-            Ok(amount) => {
-                buf.truncate(amount);
+            Ok(0) => Ok(vec![]),
+            Ok(n) => {
+                buf.truncate(n);
                 Ok(buf)
             }
             Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
@@ -121,7 +122,7 @@ impl TLSSocket {
         let mut res = try_shutdown()?;
 
         // waiting until other side send us close msg
-        while !force && res == ShutdownResult::Received {
+        while !force && res != ShutdownResult::Received {
             res = try_shutdown()?;
         }
 

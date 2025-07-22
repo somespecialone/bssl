@@ -98,15 +98,17 @@ impl ClientContext {
 
     fn connect(
         self_: Py<ClientContext>,
-        address: &str,
-        server_hostname: &str,
+        address: (Option<String>, i32),
         py: Python<'_>,
     ) -> PyResult<TLSSocket> {
+        let (host, port) = address;
+        let address_str = format!("{}:{}", host.as_deref().unwrap_or(""), port);
+        let server_hostname = host.as_deref().unwrap_or("");
+
         let py_self = self_.clone_ref(py);
         let borrowed = self_.borrow(py);
-        // TODO check how other projects handle address/hostname tension
         let ssl = Ssl::new(&borrowed.inner).unwrap();
-        let sock = TLSSocket::new(py_self, ssl, address, server_hostname);
+        let sock = TLSSocket::new(py_self, ssl, &address_str, server_hostname);
         Ok(sock)
     }
 
