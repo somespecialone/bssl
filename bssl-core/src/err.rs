@@ -2,8 +2,22 @@ use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
+pub trait ErrToPyErr<T>
+where
+    T: pyo3::PyTypeInfo,
+{
+    fn new_err<A>(arg: A) -> PyErr
+    where
+        A: pyo3::PyErrArguments + std::marker::Send + std::marker::Sync + 'static,
+    {
+        PyErr::new::<T, A>(arg)
+    }
+}
+
 #[pyclass(extends=PyException, subclass)]
 pub struct TLSError;
+
+impl ErrToPyErr<TLSError> for TLSError {}
 
 #[pymethods]
 impl TLSError {
@@ -18,6 +32,8 @@ impl TLSError {
 #[pyclass(extends=TLSError)]
 pub struct WantWriteError;
 
+impl ErrToPyErr<WantWriteError> for WantWriteError {}
+
 #[pymethods]
 impl WantWriteError {
     #[new]
@@ -31,6 +47,8 @@ impl WantWriteError {
 #[pyclass(extends=TLSError)]
 pub struct WantReadError;
 
+impl ErrToPyErr<WantReadError> for WantReadError {}
+
 #[pymethods]
 impl WantReadError {
     #[new]
@@ -43,6 +61,8 @@ impl WantReadError {
 
 #[pyclass(extends=TLSError)]
 pub struct RaggedEOF;
+
+impl ErrToPyErr<RaggedEOF> for RaggedEOF {}
 
 #[pymethods]
 impl RaggedEOF {

@@ -12,7 +12,7 @@ use std::mem::ManuallyDrop;
 
 use crate::bio::MemBio;
 use crate::ctx::ClientContext;
-use crate::err;
+use crate::err::*;
 use crate::ext::SslRefExt;
 
 #[pyclass]
@@ -55,28 +55,22 @@ impl TLSBuffer {
         let code = self.ssl.error_code(ret);
 
         match code {
-            ErrorCode::WANT_READ => PyErr::new::<err::WantReadError, _>("Need more data from peer"),
-            ErrorCode::WANT_WRITE => {
-                PyErr::new::<err::WantWriteError, _>("Need to write data to peer")
-            }
-            ErrorCode::ZERO_RETURN => {
-                PyErr::new::<err::RaggedEOF, _>("Graceful shutdown from peer")
-            }
+            ErrorCode::WANT_READ => WantReadError::new_err("Need more data from peer"),
+            ErrorCode::WANT_WRITE => WantWriteError::new_err("Need to write data to peer"),
+            ErrorCode::ZERO_RETURN => RaggedEOF::new_err("Graceful shutdown from peer"),
             ErrorCode::SSL => {
                 let err_stack = ErrorStack::get();
-                PyErr::new::<err::TLSError, _>(format!("SSl error: {err_stack}"))
+                TLSError::new_err(format!("SSl error: {err_stack}"))
             }
             ErrorCode::SYSCALL => {
                 let err_stack = ErrorStack::get();
                 if err_stack.errors().is_empty() && ret == 0 {
-                    PyErr::new::<err::RaggedEOF, _>("Unexpected EOF")
+                    RaggedEOF::new_err("Unexpected EOF")
                 } else {
                     PyOSError::new_err(format!("System error: {err_stack}"))
                 }
             }
-            err_code => {
-                PyErr::new::<err::TLSError, _>(format!("Unknown SSL error: {}", err_code.as_raw()))
-            }
+            err_code => TLSError::new_err(("Unknown SSL error: {}", err_code.as_raw())),
         }
     }
 }
@@ -103,9 +97,11 @@ impl TLSBuffer {
                 let mut buf = vec![0u8; amt];
                 let ptr = buf.as_mut_ptr();
                 ret = unsafe { ffi::SSL_read(self.ssl.as_ptr(), ptr.cast(), len) };
-                if ret > 0 || self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN {
+                if ret > 0 {
                     buf.truncate(ret as usize);
                     return buf.into_py_any(py);
+                } else if ret == 0 && self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN {
+                    return Vec::<u8>::new().into_py_any(py);
                 }
             }
             Some(buffer) => {
@@ -116,7 +112,7 @@ impl TLSBuffer {
                 let buf_slice = buffer.as_mut_slice(py).unwrap();
                 let ptr = buf_slice.as_ptr() as *mut u8;
                 ret = unsafe { ffi::SSL_read(self.ssl.as_ptr(), ptr.cast(), len) };
-                if ret > 0 || self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN {
+                if ret > 0 || (ret == 0 && self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN) {
                     return ret.into_py_any(py);
                 }
             }
@@ -167,7 +163,7 @@ impl TLSBuffer {
 
     fn shutdown(&mut self) -> PyResult<()> {
         match unsafe { ffi::SSL_shutdown(self.ssl.as_ptr()) } {
-            0 | 1 => Ok(()),
+            0 | 1 => Ok(()), // sent and received
             ret => Err(self.handle_error(ret)),
         }
     }
