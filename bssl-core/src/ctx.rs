@@ -6,8 +6,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rustls_native_certs::load_native_certs;
 
-use crate::buf;
-use crate::sock;
+use crate::buf::TLSBuffer;
+use crate::sock::TLSSocket;
 
 #[pyclass]
 pub struct ClientContext {
@@ -101,12 +101,12 @@ impl ClientContext {
         address: &str,
         server_hostname: &str,
         py: Python<'_>,
-    ) -> PyResult<sock::TLSSocket> {
+    ) -> PyResult<TLSSocket> {
         let py_self = self_.clone_ref(py);
         let borrowed = self_.borrow(py);
         // TODO check how other projects handle address/hostname tension
         let ssl = Ssl::new(&borrowed.inner).unwrap();
-        let sock = sock::new(py_self, ssl, address, server_hostname);
+        let sock = TLSSocket::new(py_self, ssl, address, server_hostname);
         Ok(sock)
     }
 
@@ -114,12 +114,12 @@ impl ClientContext {
         self_: Py<ClientContext>,
         server_hostname: &str,
         py: Python<'_>,
-    ) -> PyResult<buf::TLSBuffer> {
+    ) -> PyResult<TLSBuffer> {
         let py_self = self_.clone_ref(py);
         let borrowed = self_.borrow(py);
 
         let ssl = Ssl::new(&borrowed.inner).unwrap();
-        let buf = buf::new(py_self, ssl, server_hostname);
+        let buf = TLSBuffer::new(py_self, ssl, server_hostname);
         Ok(buf)
     }
 }

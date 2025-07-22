@@ -1,11 +1,10 @@
 use boring::error::ErrorStack;
-use boring::ssl::{ErrorCode, Ssl, SslRef};
+use boring::ssl::{ErrorCode, Ssl};
 use boring_sys as ffi;
 use foreign_types::ForeignType;
-use foreign_types::ForeignTypeRef;
 use pyo3::IntoPyObjectExt;
 use pyo3::buffer::PyBuffer;
-use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::ffi::c_int;
 use std::io::{Read, Write};
@@ -15,25 +14,6 @@ use crate::bio::MemBio;
 use crate::ctx::ClientContext;
 use crate::err;
 use crate::ext::SslRefExt;
-
-// fn make_error(ssl: &Ssl, ret: c_int) {
-//     let code = ssl.error_code(ret);
-//
-//     let cause = match code {
-//         ErrorCode::SSL => Some(InnerError::Ssl(ErrorStack::get())),
-//         ErrorCode::SYSCALL => {
-//             let errs = ErrorStack::get();
-//             if errs.errors().is_empty() {
-//                 self.get_bio_error().map(InnerError::Io)
-//             } else {
-//                 Some(InnerError::Ssl(errs))
-//             }
-//         }
-//         ErrorCode::ZERO_RETURN => None,
-//         ErrorCode::WANT_READ | ErrorCode::WANT_WRITE => self.get_bio_error().map(InnerError::Io),
-//         _ => None,
-//     };
-// }
 
 #[pyclass]
 pub struct TLSBuffer {
@@ -53,16 +33,63 @@ impl Drop for TLSBuffer {
     }
 }
 
+impl TLSBuffer {
+    pub fn new(context: Py<ClientContext>, mut ssl: Ssl, server_hostname: &str) -> Self {
+        ssl.set_hostname(server_hostname).unwrap();
+        ssl.set_connect_state();
+
+        let rbio = MemBio::new().unwrap();
+        let wbio = MemBio::new().unwrap();
+
+        ssl.set_bio(&rbio, &wbio);
+
+        Self {
+            context,
+            ssl: ManuallyDrop::new(ssl),
+            rbio,
+            wbio,
+        }
+    }
+
+    fn handle_error(&self, ret: c_int) -> PyErr {
+        let code = self.ssl.error_code(ret);
+
+        match code {
+            ErrorCode::WANT_READ => PyErr::new::<err::WantReadError, _>("Need more data from peer"),
+            ErrorCode::WANT_WRITE => {
+                PyErr::new::<err::WantWriteError, _>("Need to write data to peer")
+            }
+            ErrorCode::ZERO_RETURN => {
+                PyErr::new::<err::RaggedEOF, _>("Graceful shutdown from peer")
+            }
+            ErrorCode::SSL => {
+                let err_stack = ErrorStack::get();
+                PyErr::new::<err::TLSError, _>(format!("SSl error: {err_stack}"))
+            }
+            ErrorCode::SYSCALL => {
+                let err_stack = ErrorStack::get();
+                if err_stack.errors().is_empty() && ret == 0 {
+                    PyErr::new::<err::RaggedEOF, _>("Unexpected EOF")
+                } else {
+                    PyOSError::new_err(format!("System error: {err_stack}"))
+                }
+            }
+            err_code => {
+                PyErr::new::<err::TLSError, _>(format!("Unknown SSL error: {}", err_code.as_raw()))
+            }
+        }
+    }
+}
+
 #[pymethods]
 impl TLSBuffer {
     fn do_handshake(&mut self) -> PyResult<()> {
         let ret = unsafe { ffi::SSL_do_handshake(self.ssl.as_ptr()) };
-        // TODO appropriate errors
 
         if ret > 0 {
             Ok(())
         } else {
-            Err(PyRuntimeError::new_err("SSL_do_handshake failed"))
+            Err(self.handle_error(ret))
         }
     }
 
@@ -76,7 +103,7 @@ impl TLSBuffer {
                 let mut buf = vec![0u8; amt];
                 let ptr = buf.as_mut_ptr();
                 ret = unsafe { ffi::SSL_read(self.ssl.as_ptr(), ptr.cast(), len) };
-                if ret > 0 {
+                if ret > 0 || self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN {
                     buf.truncate(ret as usize);
                     return buf.into_py_any(py);
                 }
@@ -89,14 +116,13 @@ impl TLSBuffer {
                 let buf_slice = buffer.as_mut_slice(py).unwrap();
                 let ptr = buf_slice.as_ptr() as *mut u8;
                 ret = unsafe { ffi::SSL_read(self.ssl.as_ptr(), ptr.cast(), len) };
-                if ret > 0 {
+                if ret > 0 || self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN {
                     return ret.into_py_any(py);
                 }
             }
         }
 
-        // TODO appropriate errors
-        Err(PyRuntimeError::new_err("SSL_read failed"))
+        Err(self.handle_error(ret))
     }
 
     fn write(&mut self, buf: &[u8]) -> PyResult<usize> {
@@ -106,12 +132,11 @@ impl TLSBuffer {
 
         let len = usize::min(c_int::MAX as usize, buf.len()) as c_int;
         let ret = unsafe { ffi::SSL_write(self.ssl.as_ptr(), buf.as_ptr().cast(), len) };
-        // TODO appropriate errors
 
         if ret > 0 {
             Ok(ret as usize)
         } else {
-            Err(PyRuntimeError::new_err("SSL_write failed"))
+            Err(self.handle_error(ret))
         }
     }
 
@@ -141,10 +166,9 @@ impl TLSBuffer {
     }
 
     fn shutdown(&mut self) -> PyResult<()> {
-        // TODO errors also
         match unsafe { ffi::SSL_shutdown(self.ssl.as_ptr()) } {
             0 | 1 => Ok(()),
-            _ => Err(PyRuntimeError::new_err("SSL_shutdown failed")),
+            ret => Err(self.handle_error(ret)),
         }
     }
 
@@ -169,22 +193,5 @@ impl TLSBuffer {
             None => Ok(None),
             Some(version) => Ok(Some(version.to_string())),
         }
-    }
-}
-
-pub fn new(context: Py<ClientContext>, mut ssl: Ssl, server_hostname: &str) -> TLSBuffer {
-    ssl.set_hostname(server_hostname).unwrap();
-    ssl.set_connect_state();
-
-    let rbio = MemBio::new().unwrap();
-    let wbio = MemBio::new().unwrap();
-
-    ssl.set_bio(&rbio, &wbio);
-
-    TLSBuffer {
-        context,
-        ssl: ManuallyDrop::new(ssl),
-        rbio,
-        wbio,
     }
 }

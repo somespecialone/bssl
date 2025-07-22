@@ -1,5 +1,5 @@
 use std::ffi::c_int;
-use std::io::{Error as IoError, Read, Result as IoResult, Write};
+use std::io::{Read, Result as IoResult, Write};
 
 use boring::error::ErrorStack;
 use boring_sys as ffi;
@@ -33,12 +33,10 @@ impl Read for MemBio {
         let len = usize::min(c_int::MAX as usize, buf.len()) as c_int;
         let ret = unsafe { ffi::BIO_read(self.0, buf.as_mut_ptr().cast(), len) };
 
-        // TODO get specific error from ret
-
-        if ret > 0 {
+        if ret >= 0 {
             Ok(ret as usize)
         } else {
-            Err(IoError::last_os_error())
+            Err(ErrorStack::get().into())
         }
     }
 }
@@ -52,12 +50,10 @@ impl Write for MemBio {
         let len = usize::min(c_int::MAX as usize, buf.len()) as c_int;
         let ret = unsafe { ffi::BIO_write(self.0, buf.as_ptr().cast(), len) };
 
-        // TODO get specific error from ret
-
-        if ret > 0 {
+        if ret >= 0 {
             Ok(ret as usize)
         } else {
-            Err(IoError::last_os_error())
+            Err(ErrorStack::get().into())
         }
     }
 

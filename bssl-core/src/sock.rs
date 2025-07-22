@@ -17,6 +17,29 @@ pub struct TLSSocket {
     stream: SslStream<TcpStream>,
 }
 
+// TODO errors
+impl TLSSocket {
+    pub fn new(
+        context: Py<ClientContext>,
+        mut ssl: Ssl,
+        address: &str,
+        server_hostname: &str,
+    ) -> Self {
+        ssl.set_hostname(server_hostname).unwrap();
+
+        let ssl_param = ssl.param_mut();
+        ssl_param.set_hostflags(X509CheckFlags::NO_PARTIAL_WILDCARDS);
+        ssl_param.set_host(server_hostname).unwrap();
+
+        ssl.set_connect_state();
+
+        let tcp_stream = TcpStream::connect(address).unwrap();
+        let stream = SslStream::new(ssl, tcp_stream).unwrap();
+
+        Self { context, stream }
+    }
+}
+
 #[pymethods]
 impl TLSSocket {
     fn send(&mut self, data: &[u8]) -> PyResult<usize> {
@@ -104,24 +127,4 @@ impl TLSSocket {
 
         Ok(())
     }
-}
-
-pub fn new(
-    context: Py<ClientContext>,
-    mut ssl: Ssl,
-    address: &str,
-    server_hostname: &str,
-) -> TLSSocket {
-    ssl.set_hostname(server_hostname).unwrap();
-
-    let ssl_param = ssl.param_mut();
-    ssl_param.set_hostflags(X509CheckFlags::NO_PARTIAL_WILDCARDS);
-    ssl_param.set_host(server_hostname).unwrap();
-
-    ssl.set_connect_state();
-
-    let tcp_stream = TcpStream::connect(address).unwrap();
-    let stream = SslStream::new(ssl, tcp_stream).unwrap();
-
-    TLSSocket { context, stream }
 }
