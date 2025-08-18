@@ -1,6 +1,6 @@
-use boring::error::ErrorStack;
-use boring::ssl::{ErrorCode, Ssl};
-use boring_sys as ffi;
+use boring_sys2 as ffi;
+use boring2::error::ErrorStack;
+use boring2::ssl::{ErrorCode, Ssl};
 use foreign_types::ForeignType;
 use pyo3::IntoPyObjectExt;
 use pyo3::buffer::PyBuffer;
@@ -13,8 +13,9 @@ use std::mem::ManuallyDrop;
 use crate::bio::MemBio;
 use crate::ctx::ClientContext;
 use crate::err::*;
-use crate::ext::SslRefExt;
+use crate::ssl::SslRefExt;
 
+// https://peps.python.org/pep-0748/#buffer
 #[pyclass]
 pub struct TLSBuffer {
     #[pyo3(get)]
@@ -27,9 +28,7 @@ pub struct TLSBuffer {
 
 impl Drop for TLSBuffer {
     fn drop(&mut self) {
-        unsafe {
-            ManuallyDrop::drop(&mut self.ssl);
-        }
+        unsafe { ManuallyDrop::drop(&mut self.ssl) }
     }
 }
 
@@ -64,7 +63,7 @@ impl TLSBuffer {
             }
             ErrorCode::SYSCALL => {
                 let err_stack = ErrorStack::get();
-                if err_stack.errors().is_empty() && ret == 0 {
+                if err_stack.errors().is_empty() {
                     RaggedEOF::new_err("Unexpected EOF")
                 } else {
                     PyOSError::new_err(format!("System error: {err_stack}"))
@@ -100,7 +99,7 @@ impl TLSBuffer {
                 if ret > 0 {
                     buf.truncate(ret as usize);
                     return buf.into_py_any(py);
-                } else if ret == 0 && self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN {
+                } else if ret == 0 {
                     return Vec::<u8>::new().into_py_any(py);
                 }
             }
@@ -112,7 +111,7 @@ impl TLSBuffer {
                 let buf_slice = buffer.as_mut_slice(py).unwrap();
                 let ptr = buf_slice.as_ptr() as *mut u8;
                 ret = unsafe { ffi::SSL_read(self.ssl.as_ptr(), ptr.cast(), len) };
-                if ret > 0 || (ret == 0 && self.ssl.error_code(ret) == ErrorCode::ZERO_RETURN) {
+                if ret >= 0 {
                     return ret.into_py_any(py);
                 }
             }
@@ -137,18 +136,27 @@ impl TLSBuffer {
     }
 
     fn process_incoming(&mut self, data_from_network: &[u8]) -> PyResult<()> {
-        let _ = self.rbio.write(data_from_network).unwrap();
-        Ok(())
+        #[allow(clippy::unused_io_amount)]
+        match self.rbio.write(data_from_network) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 
-    fn process_outgoing(&mut self, amt: usize) -> PyResult<Vec<u8>> {
-        let mut buf = vec![0u8; amt];
+    #[pyo3(signature = (amount_bytes_for_network=-1))]
+    fn process_outgoing(&mut self, amount_bytes_for_network: isize) -> PyResult<Vec<u8>> {
+        let avail = self.outgoing_bytes_buffered();
+        let len = if (amount_bytes_for_network < 0) || ((avail as isize) < amount_bytes_for_network)
+        {
+            avail
+        } else {
+            amount_bytes_for_network as usize
+        };
+
+        let mut buf = vec![0u8; len];
         match self.wbio.read(&mut buf) {
-            Ok(n) if n > 0 => {
-                buf.truncate(n);
-                Ok(buf)
-            }
-            Ok(_) => Ok(Vec::new()), // nothing to read
+            Ok(0) => Ok(Vec::new()), // nothing to read
+            Ok(_) => Ok(buf),        // there should never be any short read so no truncation
             Err(e) => Err(PyRuntimeError::new_err(format!("BIO read failed: {e}"))),
         }
     }

@@ -1,27 +1,24 @@
 from typing import Callable, Generic, TypeVar
 
-from .conf import TLSClientConfiguration, TLSServerConfiguration
+from .conf import TLSClientConfiguration
 
 _ClientContext = TypeVar("_ClientContext")
-_ServerContext = TypeVar("_ServerContext")
 
 
 # https://peps.python.org/pep-0748/#runtime-access
-class TLSImplementation(Generic[_ClientContext, _ServerContext]):
+class TLSImplementation(Generic[_ClientContext]):
     __slots__ = (
         "_client_context",
-        "_server_context",
+        # "_server_context",
         "_validate_config",
     )
 
     def __init__(
         self,
         client_context: type[_ClientContext],
-        server_context: type[_ServerContext],
-        validate_config: Callable[[TLSClientConfiguration | TLSServerConfiguration], None],
+        validate_config: Callable[[TLSClientConfiguration], None],
     ) -> None:
         self._client_context = client_context
-        self._server_context = server_context
         self._validate_config = validate_config
 
     @property
@@ -32,7 +29,7 @@ class TLSImplementation(Generic[_ClientContext, _ServerContext]):
         return self._client_context
 
     @property
-    def validate_config(self) -> Callable[[TLSClientConfiguration | TLSServerConfiguration], None]:
+    def validate_config(self) -> Callable[[TLSClientConfiguration], None]:
         """A function that reveals whether this TLS implementation supports a
         particular TLS configuration.
         """

@@ -1,17 +1,12 @@
 use std::ffi::c_int;
 use std::io::{Read, Result as IoResult, Write};
 
-use boring::error::ErrorStack;
-use boring_sys as ffi;
+use boring_sys2 as ffi;
+use boring2::error::ErrorStack;
+
+use crate::utils::cvt_p;
 
 // partial copy of boring::bio as it private
-fn cvt_p<T>(r: *mut T) -> Result<*mut T, ErrorStack> {
-    if r.is_null() {
-        Err(ErrorStack::get())
-    } else {
-        Ok(r)
-    }
-}
 
 pub struct MemBio(*mut ffi::BIO);
 
@@ -36,7 +31,12 @@ impl Read for MemBio {
         if ret >= 0 {
             Ok(ret as usize)
         } else {
-            Err(ErrorStack::get().into())
+            let errors = ErrorStack::get();
+            if errors.errors().is_empty() {
+                Ok(0)
+            } else {
+                Err(errors.into())
+            }
         }
     }
 }
@@ -57,8 +57,15 @@ impl Write for MemBio {
         }
     }
 
+    // Do we need write_all ??
+
     fn flush(&mut self) -> IoResult<()> {
-        Ok(())
+        let ret = unsafe { ffi::BIO_flush(self.0) };
+        if ret == 1 {
+            Ok(())
+        } else {
+            Err(ErrorStack::get().into())
+        }
     }
 }
 
@@ -66,10 +73,14 @@ impl MemBio {
     pub fn new() -> Result<MemBio, ErrorStack> {
         ffi::init();
 
-        let bio = unsafe { cvt_p(ffi::BIO_new(ffi::BIO_s_mem()))? };
+        let method = unsafe { ffi::BIO_s_mem() };
+        let bio = unsafe { cvt_p(ffi::BIO_new(method))? };
 
         // corresponding to _ssl.c
-        unsafe { ffi::BIO_up_ref(bio) };
+        unsafe {
+            ffi::BIO_set_nbio(bio, 1);
+            ffi::BIO_up_ref(bio);
+        };
 
         Ok(MemBio(bio))
     }

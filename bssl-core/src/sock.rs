@@ -1,14 +1,15 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-use boring::ssl::{ShutdownResult, Ssl, SslStream};
-use boring::x509::verify::X509CheckFlags;
+use boring2::ssl::{Error as SslError, ShutdownResult, Ssl, SslStream};
+use boring2::x509::verify::X509CheckFlags;
 use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError};
 use pyo3::prelude::*;
 
 use crate::ctx::ClientContext;
-use crate::ext::SslRefExt;
+use crate::ssl::SslRefExt;
 
+// https://peps.python.org/pep-0748/#socket
 #[pyclass]
 pub struct TLSSocket {
     #[pyo3(get)]
@@ -24,7 +25,7 @@ impl TLSSocket {
         mut ssl: Ssl,
         address: &str,
         server_hostname: &str,
-    ) -> Self {
+    ) -> Result<Self, SslError> {
         ssl.set_hostname(server_hostname).unwrap();
 
         let ssl_param = ssl.param_mut();
@@ -34,9 +35,12 @@ impl TLSSocket {
         ssl.set_connect_state();
 
         let tcp_stream = TcpStream::connect(address).unwrap();
-        let stream = SslStream::new(ssl, tcp_stream).unwrap();
+        let mut stream = SslStream::new(ssl, tcp_stream).unwrap();
 
-        Self { context, stream }
+        match stream.do_handshake() {
+            Ok(_) => Ok(Self { context, stream }),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -58,16 +62,6 @@ impl TLSSocket {
                 Ok(buf)
             }
             Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
-        }
-    }
-
-    fn do_handshake(&mut self) -> PyResult<()> {
-        match self.stream.do_handshake() {
-            Ok(_) => Ok(()),
-            Err(err) => Err(PyRuntimeError::new_err(format!(
-                "TLS handshake failed. Msg: {err}, code: {}",
-                err.code().as_raw()
-            ))),
         }
     }
 

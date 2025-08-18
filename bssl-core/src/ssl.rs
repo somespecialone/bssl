@@ -1,8 +1,10 @@
-use boring::ssl::SslRef;
-use boring_sys as ffi;
+use boring_sys2 as ffi;
+use boring2::error::ErrorStack;
+use boring2::ssl::SslRef;
 use foreign_types::ForeignTypeRef;
 
 use crate::bio::MemBio;
+use crate::utils::cvt;
 
 pub trait SslRefExt {
     fn set_connect_state(&self);
@@ -10,6 +12,9 @@ pub trait SslRefExt {
     fn current_cipher_id(&self) -> Option<u16>;
     fn negotiated_protocol(&self) -> Option<Vec<u8>>;
     fn peer_certificate_der(&self) -> Option<Vec<u8>>;
+    fn set_aes_hw_override(&self, enable: bool);
+    fn add_application_settings(&mut self, alps: &[u8]) -> Result<(), ErrorStack>;
+    fn set_alps_use_new_codepoint(&mut self, use_new: bool);
 }
 
 impl SslRefExt for SslRef {
@@ -41,5 +46,26 @@ impl SslRefExt for SslRef {
 
     fn peer_certificate_der(&self) -> Option<Vec<u8>> {
         self.peer_certificate().map(|cert| cert.to_der().unwrap())
+    }
+
+    fn set_aes_hw_override(&self, enable: bool) {
+        unsafe { ffi::SSL_set_aes_hw_override(self.as_ptr(), enable as _) }
+    }
+
+    fn add_application_settings(&mut self, alps: &[u8]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_add_application_settings(
+                self.as_ptr(),
+                alps.as_ptr(),
+                alps.len(),
+                std::ptr::null(),
+                0,
+            ))
+            .map(|_| ())
+        }
+    }
+
+    fn set_alps_use_new_codepoint(&mut self, use_new: bool) {
+        unsafe { ffi::SSL_set_alps_use_new_codepoint(self.as_ptr(), use_new as _) }
     }
 }
