@@ -33,21 +33,25 @@ impl Drop for TLSBuffer {
 }
 
 impl TLSBuffer {
-    pub fn new(context: Py<ClientContext>, mut ssl: Ssl, server_hostname: &str) -> Self {
-        ssl.set_hostname(server_hostname).unwrap();
+    pub fn new(
+        context: Py<ClientContext>,
+        mut ssl: Ssl,
+        server_hostname: &str,
+    ) -> Result<Self, ErrorStack> {
+        ssl.set_hostname(server_hostname)?;
         ssl.set_connect_state();
 
-        let rbio = MemBio::new().unwrap();
-        let wbio = MemBio::new().unwrap();
+        let rbio = MemBio::new()?;
+        let wbio = MemBio::new()?;
 
         ssl.set_bio(&rbio, &wbio);
 
-        Self {
+        Ok(Self {
             context,
             ssl: ManuallyDrop::new(ssl),
             rbio,
             wbio,
-        }
+        })
     }
 
     fn handle_error(&self, ret: c_int) -> PyErr {

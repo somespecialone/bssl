@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-use boring2::ssl::{Error as SslError, ShutdownResult, Ssl, SslStream};
+use boring2::ssl::{ShutdownResult, Ssl, SslStream};
 use boring2::x509::verify::X509CheckFlags;
 use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError};
 use pyo3::prelude::*;
@@ -25,22 +25,24 @@ impl TLSSocket {
         mut ssl: Ssl,
         address: &str,
         server_hostname: &str,
-    ) -> Result<Self, SslError> {
-        ssl.set_hostname(server_hostname).unwrap();
+    ) -> Result<Self, String> {
+        ssl.set_hostname(server_hostname)
+            .map_err(|e| e.to_string())?;
 
         let ssl_param = ssl.param_mut();
         ssl_param.set_hostflags(X509CheckFlags::NO_PARTIAL_WILDCARDS);
-        ssl_param.set_host(server_hostname).unwrap();
+        ssl_param
+            .set_host(server_hostname)
+            .map_err(|e| e.to_string())?;
 
         ssl.set_connect_state();
 
-        let tcp_stream = TcpStream::connect(address).unwrap();
-        let mut stream = SslStream::new(ssl, tcp_stream).unwrap();
+        let tcp_stream = TcpStream::connect(address).map_err(|e| e.to_string())?;
+        let mut stream = SslStream::new(ssl, tcp_stream).map_err(|e| e.to_string())?;
 
-        match stream.do_handshake() {
-            Ok(_) => Ok(Self { context, stream }),
-            Err(e) => Err(e),
-        }
+        stream.do_handshake().map_err(|e| e.to_string())?;
+
+        Ok(Self { context, stream })
     }
 }
 

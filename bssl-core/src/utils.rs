@@ -7,7 +7,7 @@ use std::{
     num::Wrapping,
 };
 
-// boring-sys lib.rs
+// from boring-sys lib.rs
 pub fn cvt_p<T>(r: *mut T) -> Result<*mut T, ErrorStack> {
     if r.is_null() {
         Err(ErrorStack::get())
@@ -16,7 +16,6 @@ pub fn cvt_p<T>(r: *mut T) -> Result<*mut T, ErrorStack> {
     }
 }
 
-// boring-sys lib.rs
 pub fn cvt(r: c_int) -> Result<c_int, ErrorStack> {
     if r <= 0 {
         Err(ErrorStack::get())
@@ -25,6 +24,10 @@ pub fn cvt(r: c_int) -> Result<c_int, ErrorStack> {
     }
 }
 
+// Function below adapted from wreq (https://github.com/0x676e67/wreq)
+// Copyright 2025 wreq developers
+// Licensed under the Apache License, Version 2.0
+//
 // https://github.com/0x676e67/wreq/blob/d3d80f16e23e8e1594f2c45041b9403ea2b6be03/src/util.rs#L27
 pub fn fast_random() -> u64 {
     thread_local! {

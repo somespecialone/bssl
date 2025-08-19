@@ -1,3 +1,4 @@
+use boring2::error::ErrorStack;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
@@ -16,6 +17,12 @@ where
 
 #[pyclass(extends=PyException, subclass)]
 pub struct TLSError;
+
+impl TLSError {
+    pub fn from_error_stack(error_stack: ErrorStack) -> PyErr {
+        Self::new_err(error_stack.to_string())
+    }
+}
 
 impl ErrToPyErr<TLSError> for TLSError {}
 

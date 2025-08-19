@@ -98,24 +98,25 @@ impl ClientContext {
             random_aes_hw_override,
             alps_protocols,
             alps_use_new_codepoint,
-            pre_shared_key,
+            // pre_shared_key,
             ech_grease,
-            psk_skip_session_ticket,
-        ) = handshake_opts_bound
-            .extract::<(bool, Option<Vec<Vec<u8>>>, bool, bool, bool, bool)>()?;
+            // psk_skip_session_ticket,
+        ) = handshake_opts_bound.extract::<(bool, Option<Vec<Vec<u8>>>, bool, bool)>()?;
 
-        // TODO errors should be mapped to TLSError from crate
+        let mut builder =
+            SslContextBuilder::new(SslMethod::tls_client()).map_err(TLSError::from_error_stack)?;
 
-        let mut builder = SslContextBuilder::new(SslMethod::tls_client()).unwrap();
-        builder.set_cipher_list(&ciphers).unwrap();
+        builder
+            .set_cipher_list(&ciphers)
+            .map_err(TLSError::from_error_stack)?;
 
         builder
             .set_min_proto_version(Some(SslVersion::from_python_enum_value(&min_tls_version)?))
-            .unwrap();
+            .map_err(TLSError::from_error_stack)?;
 
         builder
             .set_max_proto_version(Some(SslVersion::from_python_enum_value(&max_tls_version)?))
-            .unwrap();
+            .map_err(TLSError::from_error_stack)?;
 
         if ocsp_stapling {
             builder.enable_ocsp_stapling();
@@ -127,19 +128,25 @@ impl ClientContext {
         builder.set_permute_extensions(permute_extensions);
 
         if let Some(alpn_protocols) = alpn_protocols {
-            builder.set_alpn_protos(&alpn_protocols).unwrap();
+            builder
+                .set_alpn_protos(&alpn_protocols)
+                .map_err(TLSError::from_error_stack)?;
         }
         if let Some(curves) = curves {
-            builder.set_curves_list(&curves).unwrap();
+            builder
+                .set_curves_list(&curves)
+                .map_err(TLSError::from_error_stack)?;
         }
 
         if let Some(sigalgs) = sigalgs {
-            builder.set_sigalgs_list(&sigalgs).unwrap();
+            builder
+                .set_sigalgs_list(&sigalgs)
+                .map_err(TLSError::from_error_stack)?;
         }
         if let Some(delegated_credentials) = delegated_credentials {
             builder
                 .set_delegated_credentials(&delegated_credentials)
-                .unwrap();
+                .map_err(TLSError::from_error_stack)?;
         }
 
         if let Some(record_size_limit) = record_size_limit {
@@ -159,7 +166,9 @@ impl ClientContext {
                 .map(|ext| ext.into())
                 .collect::<Vec<_>>();
 
-            builder.set_extension_permutation(&indices).unwrap();
+            builder
+                .set_extension_permutation(&indices)
+                .map_err(TLSError::from_error_stack)?;
         }
 
         if let Some(ref certificate_compression_algorithms) = certificate_compression_algorithms {
@@ -170,27 +179,29 @@ impl ClientContext {
                             .add_certificate_compression_algorithm(
                                 BrotliCertificateCompressor::default(),
                             )
-                            .unwrap();
+                            .map_err(TLSError::from_error_stack)?;
                     }
                     CertificateCompressionAlgorithm::Zlib => {
                         builder
                             .add_certificate_compression_algorithm(
                                 ZlibCertificateCompressor::default(),
                             )
-                            .unwrap();
+                            .map_err(TLSError::from_error_stack)?;
                     }
                     CertificateCompressionAlgorithm::Zstd => {
                         builder
                             .add_certificate_compression_algorithm(
                                 ZstdCertificateCompressor::default(),
                             )
-                            .unwrap();
+                            .map_err(TLSError::from_error_stack)?;
                     }
                 }
             }
         }
 
-        builder.set_default_verify_paths().unwrap(); // Do we need this?
+        builder
+            .set_default_verify_paths()
+            .map_err(TLSError::from_error_stack)?; // Do we need this?
         builder.set_verify(SslVerifyMode::PEER);
 
         // defaults from SslConnector and _ssl.c
@@ -218,15 +229,16 @@ impl ClientContext {
         builder.set_options(opts);
 
         // store
-        let mut store_builder = X509StoreBuilder::new().unwrap();
+        let mut store_builder = X509StoreBuilder::new().map_err(TLSError::from_error_stack)?;
 
         // set native certs
         let certs_res = load_native_certs();
-        certs_res.certs.iter().for_each(|cert_der| {
+        for cert_der in &certs_res.certs {
+            let cert = X509::from_der(cert_der).map_err(TLSError::from_error_stack)?;
             store_builder
-                .add_cert(X509::from_der(cert_der).unwrap())
-                .unwrap();
-        });
+                .add_cert(cert)
+                .map_err(TLSError::from_error_stack)?;
+        }
 
         // for cert_error in certs_res.errors {
         //     // waring or similar as possible options to handle errors
@@ -267,10 +279,10 @@ impl ClientContext {
         let py_self = self_.clone_ref(py);
         let borrowed = self_.borrow(py);
 
-        let ssl = Ssl::new(&borrowed.ssl_ctx).unwrap();
+        let ssl = Ssl::new(&borrowed.ssl_ctx).map_err(TLSError::from_error_stack)?;
         match TLSSocket::new(py_self, ssl, &address_str, server_hostname) {
             Ok(sock) => Ok(sock),
-            Err(e) => Err(TLSError::new_err(e.to_string())),
+            Err(e) => Err(TLSError::new_err(e)),
         }
     }
 
@@ -282,7 +294,7 @@ impl ClientContext {
         let py_self = self_.clone_ref(py);
         let borrowed = self_.borrow(py);
 
-        let mut ssl = Ssl::new(&borrowed.ssl_ctx).unwrap();
+        let mut ssl = Ssl::new(&borrowed.ssl_ctx).map_err(TLSError::from_error_stack)?;
 
         let cfg = &borrowed.handshake_config;
 
@@ -294,7 +306,8 @@ impl ClientContext {
 
         if let Some(ref alps_protocols) = cfg.alps_protocols {
             for alps in alps_protocols {
-                ssl.add_application_settings(alps).unwrap();
+                ssl.add_application_settings(alps)
+                    .map_err(TLSError::from_error_stack)?;
             }
 
             if !alps_protocols.is_empty() && cfg.alps_use_new_codepoint {
@@ -302,7 +315,8 @@ impl ClientContext {
             }
         }
 
-        let buf = TLSBuffer::new(py_self, ssl, server_hostname);
+        let buf =
+            TLSBuffer::new(py_self, ssl, server_hostname).map_err(TLSError::from_error_stack)?;
         Ok(buf)
     }
 }

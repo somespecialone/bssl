@@ -35,7 +35,7 @@ class TLSClientConfiguration:
         highest_supported_version: TLSVersion = TLSVersion.MAXIMUM_SUPPORTED,
         trust_store: TrustStore | None = None,
         # impl
-        raw_cipher_list: str = None,
+        raw_cipher_list: str = DEF_CIPHER_LIST,
         ocsp_stapling: bool = False,
         signed_cert_timestamps: bool = False,
         session_ticket: bool = True,
@@ -53,9 +53,9 @@ class TLSClientConfiguration:
         random_aes_hw_override: bool = False,
         alps_protocols: Sequence[NextProtocol | bytes] = (),
         alps_use_new_codepoint: bool = False,
-        pre_shared_key: bool = False,
+        # pre_shared_key: bool = False,
         ech_grease: bool = False,
-        psk_skip_session_ticket: bool = False,
+        # psk_skip_session_ticket: bool = False,
         certificate_compression_algorithms: Sequence[CertificateCompressionAlgorithm] = (),
         extension_permutation: Sequence[ExtensionType] = (),
     ):
@@ -68,7 +68,7 @@ class TLSClientConfiguration:
         if trust_store:
             raise NotImplementedError("trust_store is not yet implemented")
 
-        if ciphers and raw_cipher_list:
+        if ciphers and raw_cipher_list and raw_cipher_list is not DEF_CIPHER_LIST:
             raise ValueError("ciphers and raw_cipher_list are mutually exclusive")
 
         # from PEP-748
@@ -81,7 +81,7 @@ class TLSClientConfiguration:
 
         # from the current implementation
         self._raw_alpn_protocols_list = self._compose_next_protocols(inner_protocols) if inner_protocols else None
-        self._raw_cipher_list = ":".join(c.name for c in ciphers) if ciphers else (raw_cipher_list or DEF_CIPHER_LIST)
+        self._raw_cipher_list = ":".join(c.name for c in ciphers) if ciphers else raw_cipher_list
         self._ocsp_stapling = ocsp_stapling
         self._signed_cert_timestamps = signed_cert_timestamps
         self._session_ticket = session_ticket
@@ -112,9 +112,9 @@ class TLSClientConfiguration:
             [p.value if isinstance(p, NextProtocol) else p for p in alps_protocols] if alps_protocols else None
         )
         self._alps_use_new_codepoint = alps_use_new_codepoint
-        self._pre_shared_key = pre_shared_key
+        # self._pre_shared_key = pre_shared_key
         self._ech_grease = ech_grease
-        self._psk_skip_session_ticket = psk_skip_session_ticket
+        # self._psk_skip_session_ticket = psk_skip_session_ticket
         self._certificate_compression_algorithms = certificate_compression_algorithms
         self._extension_permutation = extension_permutation
 
@@ -246,7 +246,7 @@ class TLSClientConfiguration:
             self._random_aes_hw_override,
             self._raw_alps_protocols_list,
             self._alps_use_new_codepoint,
-            self._pre_shared_key,
+            # self._pre_shared_key,
             self._ech_grease,
-            self._psk_skip_session_ticket,
+            # self._psk_skip_session_ticket,
         )

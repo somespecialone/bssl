@@ -6,8 +6,6 @@ use boring2::error::ErrorStack;
 
 use crate::utils::cvt_p;
 
-// partial copy of boring::bio as it private
-
 pub struct MemBio(*mut ffi::BIO);
 
 impl Drop for MemBio {
