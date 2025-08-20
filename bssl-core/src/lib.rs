@@ -11,7 +11,7 @@ mod ssl;
 mod utils;
 
 #[pymodule]
-fn bssl_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // errors
     m.add_class::<err::TLSError>()?;
     m.add_class::<err::WantWriteError>()?;

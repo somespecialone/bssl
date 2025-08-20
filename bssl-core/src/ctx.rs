@@ -211,7 +211,6 @@ impl ClientContext {
 
         // also python defaults
         let mut opts = SslOptions::NO_SSLV2 | SslOptions::NO_SSLV3;
-        // opts |= SslOptions::NO_COMPRESSION;
         opts |= SslOptions::SINGLE_DH_USE | SslOptions::SINGLE_ECDH_USE;
 
         if !session_ticket {
@@ -224,6 +223,10 @@ impl ClientContext {
 
         if !renegotiation {
             opts |= SslOptions::NO_RENEGOTIATION;
+        }
+
+        if certificate_compression_algorithms.is_none() {
+            opts |= SslOptions::NO_COMPRESSION;
         }
 
         builder.set_options(opts);

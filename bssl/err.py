@@ -1,4 +1,4 @@
-from .bssl_core import TLSError, WantReadError, WantWriteError, RaggedEOF
+from .core import TLSError, WantReadError, WantWriteError, RaggedEOF
 
 
 class ConfigurationError(TLSError):

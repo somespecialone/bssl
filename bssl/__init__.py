@@ -1,4 +1,4 @@
-from .bssl_core import (
+from .core import (
     TLSError,
     WantWriteError,
     WantReadError,

@@ -1,12 +1,15 @@
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 
 use boring2::ssl::{ShutdownResult, Ssl, SslStream};
 use boring2::x509::verify::X509CheckFlags;
-use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError};
+use pyo3::exceptions::{
+    PyConnectionAbortedError, PyConnectionError, PyConnectionResetError, PyNotImplementedError,
+};
 use pyo3::prelude::*;
 
 use crate::ctx::ClientContext;
+use crate::err::{ErrToPyErr, RaggedEOF, TLSError};
 use crate::ssl::SslRefExt;
 
 // https://peps.python.org/pep-0748/#socket
@@ -18,7 +21,6 @@ pub struct TLSSocket {
     stream: SslStream<TcpStream>,
 }
 
-// TODO errors
 impl TLSSocket {
     pub fn new(
         context: Py<ClientContext>,
@@ -51,7 +53,17 @@ impl TLSSocket {
     fn send(&mut self, data: &[u8]) -> PyResult<usize> {
         match self.stream.write(data) {
             Ok(amount) => Ok(amount),
-            Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
+            Err(e) => match e.kind() {
+                ErrorKind::UnexpectedEof => {
+                    Err(RaggedEOF::new_err("Connection closed unexpectedly"))
+                }
+                ErrorKind::ConnectionAborted => {
+                    Err(PyConnectionAbortedError::new_err(e.to_string()))
+                }
+                ErrorKind::ConnectionReset => Err(PyConnectionResetError::new_err(e.to_string())),
+                ErrorKind::BrokenPipe => Err(PyConnectionError::new_err(e.to_string())),
+                _ => Err(TLSError::new_err(format!("Write error: {e}"))),
+            },
         }
     }
 
@@ -63,12 +75,27 @@ impl TLSSocket {
                 buf.truncate(n);
                 Ok(buf)
             }
-            Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
+            Err(e) => match e.kind() {
+                ErrorKind::UnexpectedEof => {
+                    Err(RaggedEOF::new_err("Connection closed unexpectedly"))
+                }
+                ErrorKind::ConnectionAborted => {
+                    Err(PyConnectionAbortedError::new_err(e.to_string()))
+                }
+                ErrorKind::ConnectionReset => Err(PyConnectionResetError::new_err(e.to_string())),
+                ErrorKind::BrokenPipe => Err(PyConnectionError::new_err(e.to_string())),
+                _ => Err(TLSError::new_err(format!("Send error: {e}"))),
+            },
         }
     }
 
     fn getsockname(&self) -> PyResult<String> {
-        Ok(self.stream.get_ref().local_addr().unwrap().to_string())
+        Ok(self
+            .stream
+            .get_ref()
+            .local_addr()
+            .map_err(|e| TLSError::new_err(e.to_string()))?
+            .to_string())
     }
 
     fn getpeercert(&self) -> PyResult<Option<Vec<u8>>> {
@@ -76,7 +103,12 @@ impl TLSSocket {
     }
 
     fn getpeername(&self) -> PyResult<String> {
-        Ok(self.stream.get_ref().peer_addr().unwrap().to_string())
+        Ok(self
+            .stream
+            .get_ref()
+            .peer_addr()
+            .map_err(|e| TLSError::new_err(e.to_string()))?
+            .to_string())
     }
 
     fn cipher(&self) -> PyResult<Option<u16>> {
@@ -112,7 +144,7 @@ impl TLSSocket {
         let mut try_shutdown = || {
             self.stream
                 .shutdown()
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
+                .map_err(|err| TLSError::new_err(err.to_string()))
         };
 
         let mut res = try_shutdown()?;

@@ -8,7 +8,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [lib]
-name = "bssl_core"
+name = "core"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
