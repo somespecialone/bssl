@@ -8,15 +8,16 @@ rust-version.workspace = true
 license.workspace = true
 
 [lib]
-name = "core"
-crate-type = ["cdylib", "rlib"]
+name = "bssl"
+crate-type = ["cdylib"]
+doctest = false
 
 [dependencies]
 boring-sys2 = { version = "5.0.0-alpha.4", features = ["pq-experimental"] }
 boring2 = { version = "5.0.0-alpha.4", features = ["pq-experimental"] }
 foreign-types = "0.5.0"
-pyo3 = { version = "0.25.1", features = ["extension-module"] }
 rustls-native-certs = "0.8.1"
 brotli = "8.0.2"
 flate2 = "1.1.2"
 zstd = "0.13.3"
+pyo3 = { version = "0.25.1", features = ["extension-module", "generate-import-lib"] }

@@ -1,22 +1,54 @@
 [project]
 name = "bssl"
 version = "0.1.0"
-description = "Add your description here"
+description = "Modern and flexible TLS for Python, built on BoringSSL"
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Dmytro Tkachenko", email = "itsme@somespecial.one" }]
+keywords = ["tls", "ja3", "ja4", "fingerprint"]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Operating System :: MacOS",
+    "Development Status :: 3 - Alpha",
+]
+
+[project.urls]
+Homepage = "https://github.com/somespecialone/bssl"
+Documentation = "https://github.com/somespecialone/bssl"
+Repository = "https://github.com/somespecialone/bssl/"
+"Bug Tracker" = "https://github.com/somespecialone/bssl/issues"
+
+[dependency-groups]
+dev = [
+    "aiohttp>=3.12.15",
+]
 
 [tool.maturin]
-python-packages = ["bssl"]
+features = ["pyo3/extension-module", "pyo3/generate-import-lib"]
+strip = true
+python-source = "."
 manifest-path = "bssl-core/Cargo.toml"
-
-# https://github.com/pyca/cryptography/blob/main/pyproject.toml
+sdist-generator = "git"
+bindings = "pyo3"
 
 [tool.black]
 line-length = 120
 
-[dependency-groups]
-dev = [
-    "aiohttp>=3.12.14",
-    "httpx>=0.28.1",
-]
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"

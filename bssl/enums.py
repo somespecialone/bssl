@@ -1,6 +1,6 @@
 from enum import IntEnum, Enum
 
-from .core import CertificateCompressionAlgorithm, ExtensionType
+from .bssl import CertificateCompressionAlgorithm, ExtensionType
 
 
 # https://peps.python.org/pep-0748/#proposed-interface
