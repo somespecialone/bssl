@@ -1,3 +1,5 @@
+"""Modern and flexible TLS for Python, built on BoringSSL"""
+
 from .bssl import (
     TLSError,
     WantWriteError,

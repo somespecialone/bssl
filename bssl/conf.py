@@ -16,15 +16,6 @@ DEF_CIPHER_LIST = "DEFAULT:!aNULL:!eNULL:!MD5:!3DES:!DES:!RC4:!IDEA:!SEED:!aDSS:
 
 
 class TLSClientConfiguration:
-    # __slots__ = (
-    #     "_certificate_chain",
-    #     "_ciphers",
-    #     "_inner_protocols",
-    #     "_lowest_supported_version",
-    #     "_highest_supported_version",
-    #     "_trust_store",
-    # )
-
     def __init__(
         self,
         # PEP-748

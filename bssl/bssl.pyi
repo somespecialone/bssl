@@ -1,3 +1,5 @@
+"""Core implementation of the bssl package API"""
+
 from collections.abc import Buffer
 from typing import Self, overload, final
 from enum import Enum
