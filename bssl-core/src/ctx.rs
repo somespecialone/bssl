@@ -279,11 +279,11 @@ impl ClientContext {
         let address_str = format!("{}:{}", host.as_deref().unwrap_or(""), port);
         let server_hostname = host.as_deref().unwrap_or("");
 
-        let py_self = self_.clone_ref(py);
-        let borrowed = self_.borrow(py);
+        let self_py = self_.clone_ref(py);
+        let self_borrowed = self_.borrow(py);
 
-        let ssl = Ssl::new(&borrowed.ssl_ctx).map_err(TLSError::from_error_stack)?;
-        match TLSSocket::new(py_self, ssl, &address_str, server_hostname) {
+        let ssl = Ssl::new(&self_borrowed.ssl_ctx).map_err(TLSError::from_error_stack)?;
+        match TLSSocket::new(self_py, ssl, &address_str, server_hostname) {
             Ok(sock) => Ok(sock),
             Err(e) => Err(TLSError::new_err(e)),
         }
@@ -294,12 +294,12 @@ impl ClientContext {
         server_hostname: &str,
         py: Python<'_>,
     ) -> PyResult<TLSBuffer> {
-        let py_self = self_.clone_ref(py);
-        let borrowed = self_.borrow(py);
+        let self_py = self_.clone_ref(py);
+        let self_borrowed = self_.borrow(py);
 
-        let mut ssl = Ssl::new(&borrowed.ssl_ctx).map_err(TLSError::from_error_stack)?;
+        let mut ssl = Ssl::new(&self_borrowed.ssl_ctx).map_err(TLSError::from_error_stack)?;
 
-        let cfg = &borrowed.handshake_config;
+        let cfg = &self_borrowed.handshake_config;
 
         ssl.set_enable_ech_grease(cfg.ech_grease);
 
@@ -319,7 +319,7 @@ impl ClientContext {
         }
 
         let buf =
-            TLSBuffer::new(py_self, ssl, server_hostname).map_err(TLSError::from_error_stack)?;
+            TLSBuffer::new(self_py, ssl, server_hostname).map_err(TLSError::from_error_stack)?;
         Ok(buf)
     }
 }

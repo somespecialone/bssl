@@ -35,7 +35,7 @@ impl SslRefExt for SslRef {
         let mut data: *const u8 = std::ptr::null();
         let mut len: u32 = 0;
 
-        unsafe { ffi::SSL_get0_next_proto_negotiated(self.as_ptr(), &mut data, &mut len) };
+        unsafe { ffi::SSL_get0_alpn_selected(self.as_ptr(), &mut data, &mut len) };
 
         if data.is_null() || len == 0 {
             None
