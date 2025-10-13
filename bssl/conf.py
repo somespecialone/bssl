@@ -40,7 +40,7 @@ class TLSClientConfiguration:
         record_size_limit: int | None = None,
         key_shares_limit: int | None = None,
         aes_hw_override: bool = False,
-        prefer_chacha20: bool = False,
+        preserve_tls13_cipher_list: bool = False,
         random_aes_hw_override: bool = False,
         alps_protocols: Sequence[NextProtocol | bytes] = (),
         alps_use_new_codepoint: bool = False,
@@ -96,7 +96,7 @@ class TLSClientConfiguration:
         self._record_size_limit = record_size_limit
         self._key_shares_limit = key_shares_limit
         self._aes_hw_override = aes_hw_override
-        self._prefer_chacha20 = prefer_chacha20
+        self._preserve_tls13_cipher_list = preserve_tls13_cipher_list
         self._random_aes_hw_override = random_aes_hw_override
         self._alps_protocols = alps_protocols
         self._raw_alps_protocols_list = (
@@ -191,8 +191,8 @@ class TLSClientConfiguration:
         return self._aes_hw_override
 
     @property
-    def prefer_chacha20(self) -> bool:
-        return self._prefer_chacha20
+    def preserve_tls13_cipher_list(self) -> bool:
+        return self._preserve_tls13_cipher_list
 
     @staticmethod
     def _compose_next_protocols(protos: Sequence[NextProtocol | bytes]) -> bytes:
@@ -227,7 +227,7 @@ class TLSClientConfiguration:
             self._record_size_limit,
             self._key_shares_limit,
             self._aes_hw_override,
-            self._prefer_chacha20,
+            self._preserve_tls13_cipher_list,
             self._certificate_compression_algorithms,
             self._extension_permutation,
         )

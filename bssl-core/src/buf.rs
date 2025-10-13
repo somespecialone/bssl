@@ -91,7 +91,12 @@ impl TLSBuffer {
     }
 
     #[pyo3(signature = (amt, buffer=None))]
-    fn read(&mut self, amt: usize, buffer: Option<PyBuffer<u8>>, py: Python) -> PyResult<PyObject> {
+    fn read(
+        &mut self,
+        amt: usize,
+        buffer: Option<PyBuffer<u8>>,
+        py: Python,
+    ) -> PyResult<Py<PyAny>> {
         let len = usize::min(c_int::MAX as usize, amt) as c_int;
         let ret;
 

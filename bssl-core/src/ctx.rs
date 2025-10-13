@@ -76,7 +76,7 @@ impl ClientContext {
             record_size_limit,
             key_shares_limit,
             aes_hw_override,
-            prefer_chacha20,
+            preserve_tls13_cipher_list,
             certificate_compression_algorithms,
             extension_permutation,
         ) = tls_opts_bound1.extract::<(
@@ -105,10 +105,6 @@ impl ClientContext {
 
         let mut builder =
             SslContextBuilder::new(SslMethod::tls_client()).map_err(TLSError::from_error_stack)?;
-
-        builder
-            .set_cipher_list(&ciphers)
-            .map_err(TLSError::from_error_stack)?;
 
         builder
             .set_min_proto_version(Some(SslVersion::from_python_enum_value(&min_tls_version)?))
@@ -158,7 +154,11 @@ impl ClientContext {
         }
 
         builder.set_aes_hw_override(aes_hw_override);
-        builder.set_prefer_chacha20(prefer_chacha20);
+
+        builder.set_preserve_tls13_cipher_list(preserve_tls13_cipher_list); // before set_cipher_list
+        builder
+            .set_cipher_list(&ciphers)
+            .map_err(TLSError::from_error_stack)?;
 
         if let Some(ref extension_permutation) = extension_permutation {
             let indices = extension_permutation
