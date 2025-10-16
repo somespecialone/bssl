@@ -285,7 +285,7 @@ class TLSSocket:
 # https://peps.python.org/pep-0748/#context
 @final
 class ClientContext:
-    def __init__(self, configuration: TLSClientConfiguration) -> Self:
+    def __init__(self, configuration: TLSClientConfiguration) -> None:
         """Create a new client context object from a given TLS client configuration."""
 
     @property
